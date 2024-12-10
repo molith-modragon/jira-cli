@@ -55,6 +55,23 @@ type Issue struct {
 	Fields IssueFields `json:"fields"`
 }
 
+// Release holds release info
+type Version struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	Archived        bool   `json:"archived"`
+	Released        bool   `json:"released"`
+	StartDate       string `json:"startDate"`
+	ReleaseDate     string `json:"releaseDate"`
+	UserStartDate   string `json:"userStartDate"`
+	UserReleaseDate string `json:"userReleaseDate"`
+}
+
+type ReleaseFields struct {
+	Description string `json:"description"`
+}
+
 // IssueFields holds issue fields.
 type IssueFields struct {
 	Summary     string      `json:"summary"`
