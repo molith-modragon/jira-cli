@@ -18,6 +18,7 @@ import (
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/project"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/serverinfo"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/sprint"
+	"github.com/ankitpokhrel/jira-cli/internal/cmd/tempo"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/version"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/versions"
 	"github.com/ankitpokhrel/jira-cli/internal/cmdutil"
@@ -127,6 +128,7 @@ func addChildCommands(cmd *cobra.Command) {
 		sprint.NewCmdSprint(),
 		board.NewCmdBoard(),
 		project.NewCmdProject(),
+		tempo.NewCmdTempo(),
 		open.NewCmdOpen(),
 		me.NewCmdMe(),
 		serverinfo.NewCmdServerInfo(),
