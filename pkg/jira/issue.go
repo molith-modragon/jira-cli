@@ -332,6 +332,29 @@ type issueWorklogRequest struct {
 	Comment   string `json:"comment"`
 }
 
+// Worklog represents a Jira worklog with all attributes
+type Worklog struct {
+	Self             string    `json:"self"`
+	Author           User      `json:"author"`
+	UpdateAuthor     User      `json:"updateAuthor"`
+	Comment          string    `json:"comment"`
+	Created          string    `json:"created"`
+	Updated          string    `json:"updated"`
+	Started          string    `json:"started"`
+	TimeSpent        string    `json:"timeSpent"`
+	TimeSpentSeconds int       `json:"timeSpentSeconds"`
+	ID               string    `json:"id"`
+	IssueID          string    `json:"issueId"`
+}
+
+// WorklogList represents the response structure for worklog list API
+type WorklogList struct {
+	StartAt    int       `json:"startAt"`
+	MaxResults int       `json:"maxResults"`
+	Total      int       `json:"total"`
+	Worklogs   []Worklog `json:"worklogs"`
+}
+
 // AddIssueWorklog adds worklog to an issue using POST /issue/{key}/worklog endpoint.
 // Leave param `started` empty to use the server's current datetime as start date.
 func (c *Client) AddIssueWorklog(key, started, timeSpent, comment, newEstimate string) error {
@@ -367,6 +390,34 @@ func (c *Client) AddIssueWorklog(key, started, timeSpent, comment, newEstimate s
 		return formatUnexpectedResponse(res)
 	}
 	return nil
+}
+
+// GetIssueWorklogs retrieves all worklogs for an issue using GET /issue/{key}/worklog endpoint.
+func (c *Client) GetIssueWorklogs(key string) (*WorklogList, error) {
+	path := fmt.Sprintf("/issue/%s/worklog", key)
+	res, err := c.GetV2(context.Background(), path, Header{
+		"Accept":       "application/json",
+		"Content-Type": "application/json",
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, ErrEmptyResponse
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatUnexpectedResponse(res)
+	}
+
+	var worklogList WorklogList
+	err = json.NewDecoder(res.Body).Decode(&worklogList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &worklogList, nil
 }
 
 // GetField gets all fields configured for a Jira instance using GET /field endpiont.
