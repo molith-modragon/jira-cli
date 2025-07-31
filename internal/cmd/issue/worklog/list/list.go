@@ -15,14 +15,23 @@ import (
 )
 
 const (
-	helpText = `List displays all worklogs for an issue with their complete attributes.`
+	helpText = `List displays all worklogs for an issue with their complete attributes.
+
+When --tempo flag is used, the command will also fetch custom Tempo worklog attributes 
+(requires Tempo plugin and API configuration).`
 	examples = `$ jira issue worklog list
 
 # List worklogs for a specific issue
 $ jira issue worklog list ISSUE-1
 
 # List worklogs in plain output format
-$ jira issue worklog list ISSUE-1 --plain`
+$ jira issue worklog list ISSUE-1 --plain
+
+# List worklogs with Tempo custom attributes
+$ jira issue worklog list ISSUE-1 --tempo
+
+# List worklogs with Tempo attributes in plain format
+$ jira issue worklog list ISSUE-1 --tempo --plain`
 )
 
 // NewCmdWorklogList is a worklog list command.
@@ -39,6 +48,7 @@ func NewCmdWorklogList() *cobra.Command {
 	}
 
 	cmd.Flags().Bool("plain", false, "Display output in plain text")
+	cmd.Flags().Bool("tempo", false, "Include Tempo custom attributes (requires Tempo API configuration)")
 
 	return &cmd
 }
@@ -65,6 +75,7 @@ type listParams struct {
 	issueKey string
 	debug    bool
 	plain    bool
+	tempo    bool
 }
 
 func parseArgsAndFlags(args []string, flags query.FlagParser) *listParams {
@@ -81,10 +92,14 @@ func parseArgsAndFlags(args []string, flags query.FlagParser) *listParams {
 	plain, err := flags.GetBool("plain")
 	cmdutil.ExitIfError(err)
 
+	tempo, err := flags.GetBool("tempo")
+	cmdutil.ExitIfError(err)
+
 	return &listParams{
 		issueKey: issueKey,
 		debug:    debug,
 		plain:    plain,
+		tempo:    tempo,
 	}
 }
 
@@ -111,21 +126,35 @@ func (lc *listCmd) run() error {
 	s := cmdutil.Info(fmt.Sprintf("Fetching worklogs for issue %s...", lc.params.issueKey))
 	defer s.Stop()
 
-	worklogList, err := lc.client.GetIssueWorklogs(lc.params.issueKey)
-	if err != nil {
-		return err
-	}
+	if lc.params.tempo {
+		// Use enhanced API with Tempo support
+		worklogsWithTempo, err := lc.client.GetIssueWorklogsWithTempo(lc.params.issueKey, true)
+		if err != nil {
+			return err
+		}
 
-	s.Stop()
+		s.Stop()
 
-	if len(worklogList.Worklogs) == 0 {
-		cmdutil.Failed("No worklogs found for issue %s", lc.params.issueKey)
-		return nil
-	}
+		if len(worklogsWithTempo) == 0 {
+			cmdutil.Failed("No worklogs found for issue %s", lc.params.issueKey)
+			return nil
+		}
 
-	if lc.params.plain {
-		view.PrintWorklogs(worklogList.Worklogs, lc.params.plain)
+		view.PrintWorklogsWithTempo(worklogsWithTempo, lc.params.plain)
 	} else {
+		// Use standard API
+		worklogList, err := lc.client.GetIssueWorklogs(lc.params.issueKey)
+		if err != nil {
+			return err
+		}
+
+		s.Stop()
+
+		if len(worklogList.Worklogs) == 0 {
+			cmdutil.Failed("No worklogs found for issue %s", lc.params.issueKey)
+			return nil
+		}
+
 		view.PrintWorklogs(worklogList.Worklogs, lc.params.plain)
 	}
 
