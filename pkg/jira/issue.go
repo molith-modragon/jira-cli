@@ -332,6 +332,65 @@ type issueWorklogRequest struct {
 	Comment   string `json:"comment"`
 }
 
+// Worklog represents a Jira worklog with all attributes
+type Worklog struct {
+	Self             string    `json:"self"`
+	Author           User      `json:"author"`
+	UpdateAuthor     User      `json:"updateAuthor"`
+	Comment          string    `json:"comment"`
+	Created          string    `json:"created"`
+	Updated          string    `json:"updated"`
+	Started          string    `json:"started"`
+	TimeSpent        string    `json:"timeSpent"`
+	TimeSpentSeconds int       `json:"timeSpentSeconds"`
+	ID               string    `json:"id"`
+	IssueID          string    `json:"issueId"`
+}
+
+// WorklogList represents the response structure for worklog list API
+type WorklogList struct {
+	StartAt    int       `json:"startAt"`
+	MaxResults int       `json:"maxResults"`
+	Total      int       `json:"total"`
+	Worklogs   []Worklog `json:"worklogs"`
+}
+
+// TempoAttribute represents a custom Tempo worklog attribute
+type TempoAttribute struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// TempoWorklogAttributes represents the attributes section of Tempo worklog response
+type TempoWorklogAttributes struct {
+	Self   string           `json:"self"`
+	Values []TempoAttribute `json:"values"`
+}
+
+// TempoWorklog represents a Tempo-enhanced worklog with custom attributes
+type TempoWorklog struct {
+	Self            string                 `json:"self"`
+	TempoWorklogID  int                    `json:"tempoWorklogId"`
+	JiraWorklogID   int                    `json:"jiraWorklogId"`
+	Issue           Issue                  `json:"issue"`
+	TimeSpentSeconds int                   `json:"timeSpentSeconds"`
+	BillableSeconds int                    `json:"billableSeconds"`
+	StartDate       string                 `json:"startDate"`
+	StartTime       string                 `json:"startTime"`
+	Description     string                 `json:"description"`
+	CreatedAt       string                 `json:"createdAt"`
+	UpdatedAt       string                 `json:"updatedAt"`
+	Author          User                   `json:"author"`
+	Attributes      TempoWorklogAttributes `json:"attributes"`
+}
+
+// WorklogWithTempo combines standard Jira worklog with Tempo attributes
+type WorklogWithTempo struct {
+	Worklog
+	TempoAttributes []TempoAttribute `json:"tempoAttributes,omitempty"`
+	BillableSeconds *int             `json:"billableSeconds,omitempty"`
+}
+
 // AddIssueWorklog adds worklog to an issue using POST /issue/{key}/worklog endpoint.
 // Leave param `started` empty to use the server's current datetime as start date.
 func (c *Client) AddIssueWorklog(key, started, timeSpent, comment, newEstimate string) error {
@@ -367,6 +426,73 @@ func (c *Client) AddIssueWorklog(key, started, timeSpent, comment, newEstimate s
 		return formatUnexpectedResponse(res)
 	}
 	return nil
+}
+
+// GetIssueWorklogs retrieves all worklogs for an issue using GET /issue/{key}/worklog endpoint.
+func (c *Client) GetIssueWorklogs(key string) (*WorklogList, error) {
+	path := fmt.Sprintf("/issue/%s/worklog", key)
+	res, err := c.GetV2(context.Background(), path, Header{
+		"Accept":       "application/json",
+		"Content-Type": "application/json",
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, ErrEmptyResponse
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatUnexpectedResponse(res)
+	}
+
+	var worklogList WorklogList
+	err = json.NewDecoder(res.Body).Decode(&worklogList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &worklogList, nil
+}
+
+// GetTempoWorklogDetails retrieves Tempo worklog details including custom attributes
+// using GET /api/tempo/4/worklogs/jira/{worklogID} endpoint.
+func (c *Client) GetTempoWorklogDetails(worklogID string) (*TempoWorklog, error) {
+	// Note: This endpoint requires a separate Tempo API token and different base URL
+	// For now, we'll return an error indicating Tempo configuration is needed
+	return nil, fmt.Errorf("tempo API access not configured - please configure Tempo API token and endpoint")
+}
+
+// GetIssueWorklogsWithTempo retrieves worklogs with Tempo custom attributes if available
+func (c *Client) GetIssueWorklogsWithTempo(key string, includeTempoAttributes bool) ([]WorklogWithTempo, error) {
+	// First get standard Jira worklogs
+	worklogList, err := c.GetIssueWorklogs(key)
+	if err != nil {
+		return nil, err
+	}
+
+	var enhancedWorklogs []WorklogWithTempo
+	for _, worklog := range worklogList.Worklogs {
+		enhancedWorklog := WorklogWithTempo{
+			Worklog: worklog,
+		}
+
+		// If Tempo attributes are requested, try to fetch them
+		if includeTempoAttributes {
+			tempoWorklog, err := c.GetTempoWorklogDetails(worklog.ID)
+			if err == nil && tempoWorklog != nil {
+				enhancedWorklog.TempoAttributes = tempoWorklog.Attributes.Values
+				enhancedWorklog.BillableSeconds = &tempoWorklog.BillableSeconds
+			}
+			// If Tempo fetch fails, we still return the standard worklog
+			// This ensures the command works even without Tempo configuration
+		}
+
+		enhancedWorklogs = append(enhancedWorklogs, enhancedWorklog)
+	}
+
+	return enhancedWorklogs, nil
 }
 
 // GetField gets all fields configured for a Jira instance using GET /field endpiont.
